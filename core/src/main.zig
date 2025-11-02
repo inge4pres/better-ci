@@ -8,8 +8,8 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const stdout = std.fs.File.stdout().deprecatedWriter();
-    const stderr = std.fs.File.stderr().deprecatedWriter();
+    const stdout = std.fs.File.stdout().deprecatedWriter().any();
+    const stderr = std.fs.File.stderr().deprecatedWriter().any();
 
     // Parse command line arguments
     const args = try std.process.argsAlloc(allocator);
@@ -48,7 +48,7 @@ fn generatePipeline(
     allocator: std.mem.Allocator,
     definition_file: []const u8,
     output_dir: []const u8,
-    writer: anytype,
+    writer: std.io.AnyWriter,
 ) !void {
     try writer.print("Generating pipeline from: {s}\n", .{definition_file});
     try writer.print("Output directory: {s}\n", .{output_dir});
@@ -68,7 +68,7 @@ fn generatePipeline(
     try writer.print("  cd {s} && zig build\n", .{output_dir});
 }
 
-fn printUsage(writer: anytype) !void {
+fn printUsage(writer: std.io.AnyWriter) !void {
     try writer.writeAll(
         \\better-ci - A faster, debuggable CI/CD system
         \\

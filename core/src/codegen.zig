@@ -7,7 +7,7 @@ pub fn generate(
     allocator: std.mem.Allocator,
     pipe: pipeline.Pipeline,
     output_dir: []const u8,
-    writer: anytype,
+    writer: std.io.AnyWriter,
 ) !void {
     // Create output directory
     try std.fs.cwd().makePath(output_dir);
@@ -37,7 +37,7 @@ fn generateBuildZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, outpu
     const file = try std.fs.cwd().createFile(build_path, .{});
     defer file.close();
 
-    const writer = file.deprecatedWriter();
+    const writer = file.deprecatedWriter().any();
 
     try writer.writeAll(
         \\const std = @import("std");
@@ -84,7 +84,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
     const file = try std.fs.cwd().createFile(main_path, .{});
     defer file.close();
 
-    const writer = file.deprecatedWriter();
+    const writer = file.deprecatedWriter().any();
 
     // Write imports
     try writer.writeAll("const std = @import(\"std\");\n");
@@ -100,7 +100,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
         \\    defer _ = gpa.deinit();
         \\    const allocator = gpa.allocator();
         \\
-        \\    const stdout = std.fs.File.stdout().deprecatedWriter();
+        \\    const stdout = std.fs.File.stdout().deprecatedWriter().any();
         \\
         \\    try stdout.print("=== Pipeline:
     );
@@ -131,6 +131,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             \\    // Step execution results
             \\    const StepResult = struct {
             \\        step_name: []const u8,
+            \\        error_name: ?[]const u8 = null,
             \\        err: ?anyerror = null,
             \\    };
             \\
@@ -155,7 +156,8 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             try writer.print("        var threads = try allocator.alloc(std.Thread, {d});\n", .{level.len});
             try writer.print("        defer allocator.free(threads);\n", .{});
             try writer.print("        var results = try allocator.alloc(StepResult, {d});\n", .{level.len});
-            try writer.print("        defer allocator.free(results);\n\n", .{});
+            try writer.print("        defer allocator.free(results);\n", .{});
+            try writer.print("        @memset(results, .{{ .step_name = \"\", .error_name = null, .err = null }});\n\n", .{});
 
             // Define thread function for each step in this level
             for (level, 0..) |step_idx, i| {
@@ -166,10 +168,11 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
                 try writer.print("                defer _ = thread_gpa.deinit();\n", .{});
                 try writer.print("                const thread_allocator = thread_gpa.allocator();\n", .{});
                 try writer.print("                // Use a null writer to discard output (avoid thread-safety issues)\n", .{});
-                try writer.print("                const null_writer = std.io.null_writer;\n", .{});
+                try writer.print("                const null_writer = std.io.null_writer.any();\n", .{});
                 try writer.print("                result.step_name = \"{s}\";\n", .{step.name});
                 try writer.print("                step_{s}.execute(thread_allocator, null_writer) catch |err| {{\n", .{step.id});
                 try writer.print("                    result.err = err;\n", .{});
+                try writer.print("                    result.error_name = \"StepExecutionFailed\";\n", .{});
                 try writer.print("                    return;\n", .{});
                 try writer.print("                }};\n", .{});
                 try writer.print("            }}\n", .{});
@@ -192,7 +195,8 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             try writer.print("\n        // Check for errors\n", .{});
             try writer.print("        for (results) |result| {{\n", .{});
             try writer.print("            if (result.err) |err| {{\n", .{});
-            try writer.print("                try stdout.print(\"✗ Step {{s}} failed: {{s}}\\n\", .{{result.step_name, @errorName(err)}});\n", .{});
+            try writer.print("                const err_name = result.error_name orelse \"UnknownError\";\n", .{});
+            try writer.print("                try stdout.print(\"✗ Step {{s}} failed: {{s}}\\n\", .{{result.step_name, err_name}});\n", .{});
             try writer.print("                return err;\n", .{});
             try writer.print("            }}\n", .{});
             try writer.print("            try stdout.print(\"✓ Step {{s}} completed\\n\", .{{result.step_name}});\n", .{});
@@ -220,13 +224,13 @@ fn generateStepFiles(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, outp
         const file = try std.fs.cwd().createFile(step_path, .{});
         defer file.close();
 
-        try generateStepImplementation(file.deprecatedWriter(), step);
+        try generateStepImplementation(file.deprecatedWriter().any(), step);
     }
 }
 
-fn generateStepImplementation(writer: anytype, step: pipeline.Step) !void {
+fn generateStepImplementation(writer: std.io.AnyWriter, step: pipeline.Step) !void {
     try writer.writeAll("const std = @import(\"std\");\n\n");
-    try writer.writeAll("pub fn execute(allocator: std.mem.Allocator, stdout: anytype) !void {\n");
+    try writer.writeAll("pub fn execute(allocator: std.mem.Allocator, stdout: std.io.AnyWriter) !void {\n");
 
     // Create environment map if there are env vars
     if (step.env.count() > 0) {
@@ -265,8 +269,9 @@ fn generateStepImplementation(writer: anytype, step: pipeline.Step) !void {
             try writer.writeAll("    if (result.stderr.len > 0) {\n");
             try writer.writeAll("        try stdout.print(\"{s}\", .{result.stderr});\n");
             try writer.writeAll("    }\n\n");
-            try writer.writeAll("    if (result.term.Exited != 0) {\n");
-            try writer.writeAll("        return error.CommandFailed;\n");
+            try writer.writeAll("    switch (result.term) {\n");
+            try writer.writeAll("        .Exited => |code| if (code != 0) return error.CommandFailed,\n");
+            try writer.writeAll("        else => return error.CommandFailed,\n");
             try writer.writeAll("    }\n");
         },
 
@@ -290,7 +295,10 @@ fn generateStepImplementation(writer: anytype, step: pipeline.Step) !void {
             try writer.writeAll("    defer allocator.free(result.stderr);\n\n");
             try writer.writeAll("    if (result.stdout.len > 0) try stdout.print(\"{s}\", .{result.stdout});\n");
             try writer.writeAll("    if (result.stderr.len > 0) try stdout.print(\"{s}\", .{result.stderr});\n\n");
-            try writer.writeAll("    if (result.term.Exited != 0) return error.CompileFailed;\n");
+            try writer.writeAll("    switch (result.term) {\n");
+            try writer.writeAll("        .Exited => |code| if (code != 0) return error.CompileFailed,\n");
+            try writer.writeAll("        else => return error.CompileFailed,\n");
+            try writer.writeAll("    }\n");
         },
 
         .test_run => |test_action| {
@@ -316,7 +324,10 @@ fn generateStepImplementation(writer: anytype, step: pipeline.Step) !void {
             try writer.writeAll("    defer allocator.free(result.stderr);\n\n");
             try writer.writeAll("    if (result.stdout.len > 0) try stdout.print(\"{s}\", .{result.stdout});\n");
             try writer.writeAll("    if (result.stderr.len > 0) try stdout.print(\"{s}\", .{result.stderr});\n\n");
-            try writer.writeAll("    if (result.term.Exited != 0) return error.TestsFailed;\n");
+            try writer.writeAll("    switch (result.term) {\n");
+            try writer.writeAll("        .Exited => |code| if (code != 0) return error.TestsFailed,\n");
+            try writer.writeAll("        else => return error.TestsFailed,\n");
+            try writer.writeAll("    }\n");
         },
 
         .checkout => |checkout| {
@@ -332,7 +343,10 @@ fn generateStepImplementation(writer: anytype, step: pipeline.Step) !void {
             try writer.writeAll("    defer allocator.free(result.stderr);\n\n");
             try writer.writeAll("    if (result.stdout.len > 0) try stdout.print(\"{s}\", .{result.stdout});\n");
             try writer.writeAll("    if (result.stderr.len > 0) try stdout.print(\"{s}\", .{result.stderr});\n\n");
-            try writer.writeAll("    if (result.term.Exited != 0) return error.CheckoutFailed;\n");
+            try writer.writeAll("    switch (result.term) {\n");
+            try writer.writeAll("        .Exited => |code| if (code != 0) return error.CheckoutFailed,\n");
+            try writer.writeAll("        else => return error.CheckoutFailed,\n");
+            try writer.writeAll("    }\n");
         },
 
         .artifact => |artifact| {

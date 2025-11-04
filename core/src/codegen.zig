@@ -153,31 +153,36 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             try writer.print("        threads[{d}].join();\n", .{i});
         }
 
-        // Check for errors and display logs
-        for (level, 0..) |_, i| {
-            try writer.print(
-                \\        if (results[{d}].err) |err| {{
-                \\            const err_name = results[{d}].error_name orelse "UnknownError";
-                \\            try stdout.print("✗ Step {{s}} failed: {{s}}\n", .{{results[{d}].step_name, err_name}});
-                \\            return err;
-                \\        }}
-                \\        // Display step output
-                \\        if (std.fs.cwd().readFileAlloc(allocator, log_paths[{d}], 1024 * 1024)) |log_content_{d}| {{
-                \\            defer allocator.free(log_content_{d});
-                \\            if (log_content_{d}.len > 0) {{
-                \\                try stdout.print("{{s}}", .{{log_content_{d}}});
-                \\            }}
-                \\        }} else |err| {{
-                \\
-            , .{ i, i, i, i, i, i, i, i });
-            const step = pipe.steps[level[i]];
-            try writer.print("            try stdout.print(\"Warning: Could not read log for step {s}: {{any}}\\n\", .{{err}});\n", .{step.name});
-            try writer.print(
-                \\        }}
-                \\        try stdout.print("✓ Step {{s}} completed\n", .{{results[{d}].step_name}});
-                \\
-            , .{i});
-        }
+        // Check for errors and display logs using a for loop
+        try writer.print(
+            \\        for (results, 0..) |result, i| {{
+            \\            if (result.err) |err| {{
+            \\                const err_name = result.error_name orelse "UnknownError";
+            \\                try stdout.print("✗ Step {{s}} failed: {{s}}\n", .{{result.step_name, err_name}});
+            \\                // Display failed step's log
+            \\                if (std.fs.cwd().readFileAlloc(allocator, log_paths[i], 1024 * 1024)) |log_content| {{
+            \\                    defer allocator.free(log_content);
+            \\                    if (log_content.len > 0) {{
+            \\                        try stdout.print("{{s}}", .{{log_content}});
+            \\                    }}
+            \\                }} else |read_err| {{
+            \\                    try stdout.print("Warning: Could not read log: {{any}}\n", .{{read_err}});
+            \\                }}
+            \\                return err;
+            \\            }}
+            \\            // Display successful step's log
+            \\            if (std.fs.cwd().readFileAlloc(allocator, log_paths[i], 1024 * 1024)) |log_content| {{
+            \\                defer allocator.free(log_content);
+            \\                if (log_content.len > 0) {{
+            \\                    try stdout.print("{{s}}", .{{log_content}});
+            \\                }}
+            \\            }} else |read_err| {{
+            \\                try stdout.print("Warning: Could not read log for step {{s}}: {{any}}\n", .{{result.step_name, read_err}});
+            \\            }}
+            \\            try stdout.print("✓ Step {{s}} completed\n", .{{result.step_name}});
+            \\        }}
+            \\
+        , .{});
         try writer.print(
             \\        try stdout.print("\n", .{{}});
             \\    }}

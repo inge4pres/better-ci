@@ -20,14 +20,19 @@ The core compiler reads pipeline definitions and generates Zig code that compile
   - Topological sorting to determine execution levels
   - Thread-safe parallel execution with isolated allocators
   - Proper error propagation from threads
+  - File-based logging for thread-safe output capture
 - ✅ **Better error handling and validation**
-  - Type-safe writer abstractions (std.io.AnyWriter)
+  - Type-safe writer abstractions (migrated to std.Io.Writer from Zig 0.15.2)
   - Comprehensive field validation with helpful error messages
   - Memory leak prevention with proper errdefer usage
   - Duplicate step ID detection
   - Invalid character validation for step IDs
   - Empty pipeline detection
-- ✅ Example pipelines (hello-world, parallel execution demo)
+- ✅ **Build system improvements**
+  - Automated example generation with `zig build examples`
+  - Organized generated files in `examples/_generated/`
+  - Proper .gitignore for generated artifacts
+- ✅ Example pipelines (hello-world, simple-pipeline, parallel-pipeline)
 
 **Remaining Work:**
 - [ ] Advanced action types (docker, cache, notifications)
@@ -69,8 +74,10 @@ Standalone Pipeline Executable (with parallelism built-in)
 - Type-safe step definitions
 - Incremental compilation via Zig's build system
 - **Automatic parallelization** - steps without dependencies run concurrently
+- **Thread-safe logging** - each step writes to its own log file, no output corruption
 - **Comprehensive validation** - catch errors before execution
 - **Fast execution** - compiled code with minimal overhead
+- **Debuggable output** - log files preserved for inspection and debugging
 
 ---
 
@@ -461,11 +468,12 @@ Usage on any platform:
 ## Success Metrics
 
 ### Phase 1 (Core)
-- [x] Successfully generate and run example pipelines (2 working examples)
+- [x] Successfully generate and run example pipelines (3 working examples)
 - [x] Performance: Generate pipeline in < 1 second
 - [x] Performance: Compiled pipeline startup < 100ms
-- [x] Parallel execution working correctly
+- [x] Parallel execution working correctly with thread-safe logging
 - [x] Comprehensive error messages for invalid pipelines
+- [x] Automated example generation via build system
 - [ ] 10+ diverse example pipelines
 - [ ] Zero security vulnerabilities in generated code (needs security audit)
 - [ ] 80%+ test coverage (parser tests complete, need more integration tests)

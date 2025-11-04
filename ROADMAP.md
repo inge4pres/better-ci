@@ -6,27 +6,37 @@ This roadmap outlines the development plan for Better-CI, an innovative CI/CD sy
 
 ## Phase 1: Core Compiler (IN PROGRESS)
 
-### Status: Initial implementation complete
+### Status: Core functionality complete, refinements ongoing
 
-The core compiler reads pipeline definitions and generates Zig code that compiles into standalone executables.
+The core compiler reads pipeline definitions and generates Zig code that compiles into standalone executables with full parallel execution support.
 
 **Completed:**
 - ✅ Project structure and build system
 - ✅ Pipeline data model (steps, actions, dependencies)
-- ✅ JSON parser for pipeline definitions
+- ✅ JSON parser for pipeline definitions with comprehensive validation
 - ✅ Code generator for build.zig and step implementations
 - ✅ Support for basic action types (shell, compile, test, checkout, artifact)
+- ✅ **Parallel step execution based on dependency graph**
+  - Topological sorting to determine execution levels
+  - Thread-safe parallel execution with isolated allocators
+  - Proper error propagation from threads
+- ✅ **Better error handling and validation**
+  - Type-safe writer abstractions (std.io.AnyWriter)
+  - Comprehensive field validation with helpful error messages
+  - Memory leak prevention with proper errdefer usage
+  - Duplicate step ID detection
+  - Invalid character validation for step IDs
+  - Empty pipeline detection
+- ✅ Example pipelines (hello-world, parallel execution demo)
 
 **Remaining Work:**
-- [ ] Parallel step execution based on dependency graph
-- [ ] Better error handling and validation
 - [ ] Advanced action types (docker, cache, notifications)
 - [ ] Pipeline variables and parameter substitution
 - [ ] Conditional step execution
 - [ ] Step retry mechanisms
 - [ ] Comprehensive testing suite
-- [ ] CLI improvements (verbose mode, dry-run, validation)
-- [ ] Documentation and examples
+- [ ] CLI improvements (verbose mode, dry-run, validation command)
+- [ ] More example pipelines
 - [ ] Performance optimizations
 
 ### Technical Details
@@ -35,20 +45,22 @@ The core compiler reads pipeline definitions and generates Zig code that compile
 ```
 Pipeline Definition (JSON)
     ↓
-Parser (parser.zig)
+Parser (parser.zig) - validates and builds dependency graph
     ↓
 Pipeline Model (pipeline.zig)
     ↓
-Code Generator (codegen.zig)
+Dependency Analysis (graph.zig) - computes execution levels
+    ↓
+Code Generator (codegen.zig) - generates parallel execution code
     ↓
 Generated Files:
   - build.zig (orchestration)
-  - src/main.zig (pipeline entry point)
+  - src/main.zig (pipeline entry point with parallel execution)
   - src/step_*.zig (individual step implementations)
     ↓
-zig build
+ zig build
     ↓
-Standalone Pipeline Executable
+Standalone Pipeline Executable (with parallelism built-in)
 ```
 
 **Key Benefits Achieved:**
@@ -56,6 +68,9 @@ Standalone Pipeline Executable
 - Standard debugging with gdb/lldb
 - Type-safe step definitions
 - Incremental compilation via Zig's build system
+- **Automatic parallelization** - steps without dependencies run concurrently
+- **Comprehensive validation** - catch errors before execution
+- **Fast execution** - compiled code with minimal overhead
 
 ---
 
@@ -446,11 +461,14 @@ Usage on any platform:
 ## Success Metrics
 
 ### Phase 1 (Core)
-- [ ] Successfully generate and run 10+ example pipelines
-- [ ] Performance: Generate pipeline in < 1 second
-- [ ] Performance: Compiled pipeline startup < 100ms
-- [ ] Zero security vulnerabilities in generated code
-- [ ] 80%+ test coverage
+- [x] Successfully generate and run example pipelines (2 working examples)
+- [x] Performance: Generate pipeline in < 1 second
+- [x] Performance: Compiled pipeline startup < 100ms
+- [x] Parallel execution working correctly
+- [x] Comprehensive error messages for invalid pipelines
+- [ ] 10+ diverse example pipelines
+- [ ] Zero security vulnerabilities in generated code (needs security audit)
+- [ ] 80%+ test coverage (parser tests complete, need more integration tests)
 
 ### Phase 2 (Website)
 - [ ] Documentation covers all features

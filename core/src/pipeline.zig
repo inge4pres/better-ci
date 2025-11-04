@@ -65,12 +65,7 @@ pub const Action = union(enum) {
 
     pub fn deinit(self: Action, allocator: std.mem.Allocator) void {
         switch (self) {
-            .shell => |a| a.deinit(allocator),
-            .compile => |a| a.deinit(allocator),
-            .test_run => |a| a.deinit(allocator),
-            .checkout => |a| a.deinit(allocator),
-            .artifact => |a| a.deinit(allocator),
-            .custom => |a| a.deinit(allocator),
+            inline else => |a| a.deinit(allocator),
         }
     }
 };

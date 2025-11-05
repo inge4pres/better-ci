@@ -1,0 +1,27 @@
+{
+  "name": "env-test-pipeline",
+  "description": "Test pipeline to demonstrate global environment variables",
+  "steps": [
+    {
+      "id": "show_global_env",
+      "name": "Show Global Environment",
+      "action": {
+        "type": "shell",
+        "command": "echo 'Build Version: '$BUILD_VERSION && echo 'Deployment Env: '$DEPLOYMENT_ENV && echo 'Debug Mode: '$DEBUG_MODE"
+      }
+    },
+    {
+      "id": "show_merged_env",
+      "name": "Show Merged Environment",
+      "depends_on": ["show_global_env"],
+      "action": {
+        "type": "shell",
+        "command": "echo 'Build Version: '$BUILD_VERSION && echo 'Step Override: '$STEP_SPECIFIC"
+      },
+      "env": {
+        "STEP_SPECIFIC": "step-value",
+        "BUILD_VERSION": "2.0.0-overridden"
+      }
+    }
+  ]
+}

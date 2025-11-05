@@ -2,6 +2,7 @@ const std = @import("std");
 const pipeline = @import("pipeline.zig");
 const parser = @import("parser.zig");
 const codegen = @import("codegen.zig");
+const envfile = @import("envfile.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -40,9 +41,30 @@ pub fn main() !void {
         }
 
         const definition_file = args[2];
-        const output_dir = if (args.len > 3) args[3] else "generated";
 
-        try generatePipeline(allocator, definition_file, output_dir, stdout);
+        // Parse optional arguments
+        var output_dir: []const u8 = "generated";
+        var env_file: ?[]const u8 = null;
+
+        var i: usize = 3;
+        while (i < args.len) : (i += 1) {
+            const arg = args[i];
+            if (std.mem.eql(u8, arg, "--env-file")) {
+                if (i + 1 >= args.len) {
+                    try stderr.print("Error: --env-file requires a file path\n", .{});
+                    try printUsage(stderr);
+                    try stderr.flush();
+                    std.process.exit(1);
+                }
+                env_file = args[i + 1];
+                i += 1;
+            } else if (!std.mem.startsWith(u8, arg, "--")) {
+                // Non-flag argument is treated as output directory
+                output_dir = arg;
+            }
+        }
+
+        try generatePipeline(allocator, definition_file, output_dir, env_file, stdout);
         try stdout.flush();
     } else if (std.mem.eql(u8, command, "help")) {
         try printUsage(stdout);
@@ -62,14 +84,23 @@ fn generatePipeline(
     allocator: std.mem.Allocator,
     definition_file: []const u8,
     output_dir: []const u8,
+    env_file_path: ?[]const u8,
     writer: *std.Io.Writer,
 ) !void {
     try writer.print("Generating pipeline from: {s}\n", .{definition_file});
     try writer.print("Output directory: {s}\n", .{output_dir});
 
     // Parse the pipeline definition
-    const pipe = try parser.parseDefinitionFile(allocator, definition_file);
+    var pipe = try parser.parseDefinitionFile(allocator, definition_file);
     defer pipe.deinit(allocator);
+
+    // Load global environment variables if provided
+    if (env_file_path) |env_path| {
+        try writer.print("Loading environment from: {s}\n", .{env_path});
+        const env_map = try envfile.parseEnvFile(allocator, env_path);
+        try writer.print("Loaded {d} environment variables\n", .{env_map.count()});
+        pipe.environment = env_map;
+    }
 
     try writer.print("Parsed pipeline: {s}\n", .{pipe.name});
     try writer.print("Steps: {d}\n", .{pipe.steps.len});
@@ -90,13 +121,23 @@ fn printUsage(writer: *std.Io.Writer) !void {
         \\  better-ci <command> [options]
         \\
         \\Commands:
-        \\  generate <file> [output-dir]  Generate a pipeline executable from definition
-        \\  help                          Show this help message
-        \\  version                       Show version information
+        \\  generate <file> [output-dir] [--env-file <path>]
+        \\    Generate a pipeline executable from definition
+        \\
+        \\  help
+        \\    Show this help message
+        \\
+        \\  version
+        \\    Show version information
+        \\
+        \\Options:
+        \\  --env-file <path>    Load global environment variables from file
         \\
         \\Examples:
         \\  better-ci generate pipeline.json
         \\  better-ci generate pipeline.json ./my-pipeline
+        \\  better-ci generate pipeline.json --env-file .env
+        \\  better-ci generate pipeline.json ./my-pipeline --env-file production.env
         \\
     );
 }
@@ -104,6 +145,7 @@ fn printUsage(writer: *std.Io.Writer) !void {
 // Tests
 test {
     _ = @import("codegen.zig");
+    _ = @import("envfile.zig");
     _ = @import("graph.zig");
     _ = @import("parser.zig");
     _ = @import("pipeline.zig");

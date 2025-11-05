@@ -91,23 +91,6 @@ pub const main_success_footer =
     \\
 ;
 
-// Single step execution template
-pub const single_step_execution =
-    \\    try stdout.print("Running step: {s}...\n", .{{}});
-    \\    const log_path_{s} = try std.fmt.allocPrint(allocator, "{{s}}/step_{s}.log", .{{log_dir}});
-    \\    defer allocator.free(log_path_{s});
-    \\    try step_{s}.execute(allocator, log_path_{s});
-    \\    // Display step output
-    \\    const log_content_{s} = try std.fs.cwd().readFileAlloc(allocator, log_path_{s}, 1024 * 1024);
-    \\    defer allocator.free(log_content_{s});
-    \\    if (log_content_{s}.len > 0) {{
-    \\        try stdout.print("{{s}}", .{{log_content_{s}}});
-    \\    }}
-    \\    try stdout.print("✓ Step {s} completed\n\n", .{{}});
-    \\
-    \\
-;
-
 // Parallel step execution templates
 pub const ParallelStepExecution = struct {
     pub fn allocateThreads(count: usize) ![]const u8 {
@@ -123,7 +106,7 @@ pub const ParallelStepExecution = struct {
             \\        defer allocator.free(log_paths);
             \\
             \\
-            ,
+        ,
             .{ count, count, count },
         );
     }
@@ -146,7 +129,7 @@ pub const ParallelStepExecution = struct {
             \\        }}.run;
             \\
             \\
-            ,
+        ,
             .{ index, step_name, step_id },
         );
     }

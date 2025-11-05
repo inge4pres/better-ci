@@ -81,19 +81,8 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
     const plan = try graph.computeExecutionPlan(allocator, pipe);
     defer plan.deinit();
 
-    // Check if we need parallel execution support
-    var needs_parallel = false;
-    for (plan.levels) |level| {
-        if (level.len > 1) {
-            needs_parallel = true;
-            break;
-        }
-    }
-
-    // Generate parallel execution code
-    if (needs_parallel) {
-        try writer.writeAll(templates.step_result_struct);
-    }
+    // Always generate StepResult struct since we use thread-based execution
+    try writer.writeAll(templates.step_result_struct);
 
     // For each execution level
     for (plan.levels, 0..) |level, level_idx| {
@@ -210,20 +199,44 @@ fn generateStepFiles(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, outp
         const writer = &file_writer.interface;
         defer writer.flush() catch {};
 
-        try generateStepImplementation(writer, step);
+        try generateStepImplementation(writer, step, pipe.environment);
     }
 }
 
-fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step) !void {
+fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step, global_env: ?std.StringHashMap([]const u8)) !void {
     try writer.writeAll(templates.step_header);
 
-    // Create environment map if there are env vars
-    if (step.env.count() > 0) {
+    // Determine if this action type supports environment variables
+    const action_supports_env = switch (step.action) {
+        .shell, .compile, .test_run, .checkout => true,
+        .artifact, .custom => false,
+    };
+
+    // Determine if we need to create an environment map
+    const has_global_env = if (global_env) |env| env.count() > 0 else false;
+    const has_step_env = step.env.count() > 0;
+    const needs_env = action_supports_env and (has_global_env or has_step_env);
+
+    // Create environment map if there are any env vars (global or step-specific)
+    if (needs_env) {
         try writer.writeAll(templates.step_env_setup);
-        var it = step.env.iterator();
-        while (it.next()) |entry| {
-            try writer.print("    try env_map.put(\"{s}\", \"{s}\");\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+
+        // First, add global environment variables
+        if (global_env) |env| {
+            var it = env.iterator();
+            while (it.next()) |entry| {
+                try writer.print("    try env_map.put(\"{s}\", \"{s}\");\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+            }
         }
+
+        // Then, add/override with step-specific environment variables
+        if (has_step_env) {
+            var it = step.env.iterator();
+            while (it.next()) |entry| {
+                try writer.print("    try env_map.put(\"{s}\", \"{s}\");\n", .{ entry.key_ptr.*, entry.value_ptr.* });
+            }
+        }
+
         try writer.writeAll("\n");
     }
 
@@ -241,7 +254,7 @@ fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step) !void
                 , .{wd});
             }
 
-            if (step.env.count() > 0) {
+            if (needs_env) {
                 try writer.print(templates.ShellAction.execute_with_env, .{shell.command});
             } else {
                 try writer.print(templates.ShellAction.execute_without_env, .{shell.command});
@@ -258,7 +271,7 @@ fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step) !void
                 .ReleaseSmall => "ReleaseSmall",
             };
 
-            if (step.env.count() > 0) {
+            if (needs_env) {
                 try writer.print(templates.CompileAction.execute_with_env, .{ compile.source_file, optimize_str, compile.output_name });
             } else {
                 try writer.print(templates.CompileAction.execute_without_env, .{ compile.source_file, optimize_str, compile.output_name });
@@ -269,13 +282,13 @@ fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step) !void
         .test_run => |test_action| {
             try writer.writeAll("    // Run tests\n");
             if (test_action.filter) |filter| {
-                if (step.env.count() > 0) {
+                if (needs_env) {
                     try writer.print(templates.TestAction.execute_with_filter_and_env, .{ test_action.test_file, filter });
                 } else {
                     try writer.print(templates.TestAction.execute_with_filter_no_env, .{ test_action.test_file, filter });
                 }
             } else {
-                if (step.env.count() > 0) {
+                if (needs_env) {
                     try writer.print(templates.TestAction.execute_without_filter_with_env, .{test_action.test_file});
                 } else {
                     try writer.print(templates.TestAction.execute_without_filter_no_env, .{test_action.test_file});
@@ -286,7 +299,7 @@ fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step) !void
 
         .checkout => |checkout| {
             try writer.writeAll("    // Checkout code from repository\n");
-            if (step.env.count() > 0) {
+            if (needs_env) {
                 try writer.print(templates.CheckoutAction.execute_with_env, .{ checkout.branch, checkout.repository, checkout.path });
             } else {
                 try writer.print(templates.CheckoutAction.execute_without_env, .{ checkout.branch, checkout.repository, checkout.path });
@@ -332,6 +345,7 @@ test "generate basic pipeline" {
         .name = try allocator.dupe(u8, "test-pipeline"),
         .description = try allocator.dupe(u8, "Test"),
         .steps = steps,
+        .environment = null,
     };
     defer pipe.deinit(allocator);
 

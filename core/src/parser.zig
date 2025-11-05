@@ -143,6 +143,7 @@ pub fn parseDefinition(allocator: std.mem.Allocator, json_str: []const u8) Parse
         .name = name,
         .description = description,
         .steps = steps,
+        .environment = null, // Will be set by CLI if env file is provided
     };
 }
 

@@ -5,6 +5,7 @@ pub const Pipeline = struct {
     name: []const u8,
     description: []const u8,
     steps: []Step,
+    environment: ?std.StringHashMap([]const u8) = null, // Optional global environment variables
 
     pub fn deinit(self: Pipeline, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -13,6 +14,17 @@ pub const Pipeline = struct {
             step.deinit(allocator);
         }
         allocator.free(self.steps);
+
+        // Free global environment variables if present
+        if (self.environment) |*env| {
+            var it = env.iterator();
+            while (it.next()) |entry| {
+                allocator.free(entry.key_ptr.*);
+                allocator.free(entry.value_ptr.*);
+            }
+            var env_copy = env.*;
+            env_copy.deinit();
+        }
     }
 };
 
@@ -176,6 +188,7 @@ test "pipeline creation" {
         .name = try allocator.dupe(u8, "test-pipeline"),
         .description = try allocator.dupe(u8, "A test pipeline"),
         .steps = steps,
+        .environment = null,
     };
 
     try testing.expectEqualStrings("test-pipeline", pipe.name);

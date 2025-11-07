@@ -34,8 +34,8 @@ pub fn buildZigZon(allocator: std.mem.Allocator, pipeline_name: []const u8) ![]c
         \\    .minimum_zig_version = "0.15.2",
         \\    .dependencies = .{{
         \\        .recipes = .{{
-        \\            .url = "git+https://github.com/inge4pres/better-ci#main",
-        \\            .hash = "better_ci-0.0.1-X0u4hCLqAQBj1dWTRwp8wp9CTf_fZwvnEekEh0BmRqOW",
+        \\            .url = "git+https://github.com/inge4pres/better-ci?ref=main#93fe749185d4c2d27876e38b2f48f1341e131807",
+        \\            .hash = "better_ci-0.0.1-X0u4hOP2AQCds5Jn9sONgf7F2vcpFQ-9GOfiMmPWOT4E",
         \\        }},
         \\    }},
         \\    .paths = .{{

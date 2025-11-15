@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // dependencies
+    const clap = b.dependency("clap", .{});
+
     // The core compiler executable
     const exe = b.addExecutable(.{
         .name = "better-ci",
@@ -11,6 +14,12 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{
+                    .name = "clap",
+                    .module = clap.module("clap"),
+                },
+            },
         }),
     });
 

@@ -1,8 +1,15 @@
 const std = @import("std");
+const clap = @import("clap");
 const pipeline = @import("pipeline.zig");
 const parser = @import("parser.zig");
 const codegen = @import("codegen.zig");
 const envfile = @import("envfile.zig");
+
+const SubCommands = enum {
+    generate,
+    help,
+    version,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -20,64 +27,117 @@ pub fn main() !void {
     const stderr = &stderr_writer.interface;
     defer stderr.flush() catch {};
 
-    // Parse command line arguments
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    // Parse main command with subcommand support
+    var iter = try std.process.ArgIterator.initWithAllocator(allocator);
+    defer iter.deinit();
 
-    if (args.len < 2) {
-        try printUsage(stderr);
+    // Skip the executable name
+    iter.skip();
+
+    const main_parsers = .{
+        .command = clap.parsers.enumeration(SubCommands),
+    };
+
+    const main_params = comptime clap.parseParamsComptime(
+        \\-h, --help    Display this help and exit
+        \\<command>
+        \\
+    );
+
+    var diag = clap.Diagnostic{};
+    var res = clap.parseEx(clap.Help, &main_params, main_parsers, &iter, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+        .terminating_positional = 0,
+    }) catch |err| {
+        try diag.reportToFile(.stderr(), err);
         try stderr.flush();
         std.process.exit(1);
-    }
+    };
+    defer res.deinit();
 
-    const command = args[1];
-
-    if (std.mem.eql(u8, command, "generate")) {
-        if (args.len < 3) {
-            try stderr.print("Error: generate command requires a pipeline definition file\n", .{});
-            try printUsage(stderr);
-            try stderr.flush();
-            std.process.exit(1);
-        }
-
-        const definition_file = args[2];
-
-        // Parse optional arguments
-        var output_dir: []const u8 = "generated";
-        var env_file: ?[]const u8 = null;
-
-        var i: usize = 3;
-        while (i < args.len) : (i += 1) {
-            const arg = args[i];
-            if (std.mem.eql(u8, arg, "--env-file")) {
-                if (i + 1 >= args.len) {
-                    try stderr.print("Error: --env-file requires a file path\n", .{});
-                    try printUsage(stderr);
-                    try stderr.flush();
-                    std.process.exit(1);
-                }
-                env_file = args[i + 1];
-                i += 1;
-            } else if (!std.mem.startsWith(u8, arg, "--")) {
-                // Non-flag argument is treated as output directory
-                output_dir = arg;
-            }
-        }
-
-        try generatePipeline(allocator, definition_file, output_dir, env_file, stdout);
-        try stdout.flush();
-    } else if (std.mem.eql(u8, command, "help")) {
+    if (res.args.help != 0) {
         try printUsage(stdout);
         try stdout.flush();
-    } else if (std.mem.eql(u8, command, "version")) {
-        try stdout.print("better-ci version 0.1.0\n", .{});
-        try stdout.flush();
-    } else {
-        try stderr.print("Error: unknown command '{s}'\n", .{command});
+        return;
+    }
+
+    const command = res.positionals[0] orelse {
+        try stderr.print("Error: no command provided\n\n", .{});
         try printUsage(stderr);
         try stderr.flush();
         std.process.exit(1);
+    };
+
+    switch (command) {
+        .generate => try runGenerate(allocator, &iter, stdout, stderr),
+        .help => {
+            try printUsage(stdout);
+            try stdout.flush();
+        },
+        .version => {
+            try stdout.print("better-ci version 0.1.0\n", .{});
+            try stdout.flush();
+        },
     }
+}
+
+fn runGenerate(
+    allocator: std.mem.Allocator,
+    iter: *std.process.ArgIterator,
+    stdout: *std.Io.Writer,
+    stderr: *std.Io.Writer,
+) !void {
+    // Define parameters for the generate subcommand
+    const params = comptime clap.parseParamsComptime(
+        \\<STR>...              Positional arguments: <file> [output-dir]
+        \\--env-file <STR>      Load global environment variables from file
+        \\-h, --help            Display this help and exit
+        \\
+    );
+
+    const parsers = comptime .{
+        .STR = clap.parsers.string,
+    };
+
+    var diag = clap.Diagnostic{};
+    var res = clap.parseEx(clap.Help, &params, parsers, iter, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+    }) catch |err| {
+        try diag.reportToFile(.stderr(), err);
+        try stderr.flush();
+        std.process.exit(1);
+    };
+    defer res.deinit();
+
+    if (res.args.help != 0) {
+        try printGenerateUsage(stdout);
+        try stdout.flush();
+        return;
+    }
+
+    // Get required positional argument
+    if (res.positionals[0].len == 0) {
+        try stderr.print("Error: generate command requires a pipeline definition file\n\n", .{});
+        try printGenerateUsage(stderr);
+        try stderr.flush();
+        std.process.exit(1);
+    }
+
+    const definition_file = res.positionals[0][0];
+
+    // Get optional positional argument with default
+    const output_dir = if (res.positionals[0].len > 1)
+        res.positionals[0][1]
+    else
+        "generated";
+
+    // Get optional flag argument
+    const env_file = res.args.@"env-file";
+
+    try generatePipeline(allocator, definition_file, output_dir, env_file, stdout);
+    try stdout.flush();
 }
 
 fn generatePipeline(
@@ -132,6 +192,29 @@ fn printUsage(writer: *std.Io.Writer) !void {
         \\
         \\Options:
         \\  --env-file <path>    Load global environment variables from file
+        \\
+        \\Examples:
+        \\  better-ci generate pipeline.json
+        \\  better-ci generate pipeline.json ./my-pipeline
+        \\  better-ci generate pipeline.json --env-file .env
+        \\  better-ci generate pipeline.json ./my-pipeline --env-file production.env
+        \\
+    );
+}
+
+fn printGenerateUsage(writer: *std.Io.Writer) !void {
+    try writer.writeAll(
+        \\Usage: better-ci generate <file> [output-dir] [options]
+        \\
+        \\Generate a pipeline executable from a JSON definition file
+        \\
+        \\Arguments:
+        \\  <file>           Pipeline definition file (required)
+        \\  [output-dir]     Output directory (default: generated)
+        \\
+        \\Options:
+        \\  --env-file <path>  Load global environment variables from file
+        \\  -h, --help         Display this help and exit
         \\
         \\Examples:
         \\  better-ci generate pipeline.json

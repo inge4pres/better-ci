@@ -1,4 +1,4 @@
-/// Recipe module - Extensible action types for better-ci pipelines
+/// Recipe module - Extensible action types for stringr pipelines
 ///
 /// This module provides the Recipe interface and implementations for
 /// custom action types that extend beyond the core action set.

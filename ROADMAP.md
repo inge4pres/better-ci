@@ -1,8 +1,8 @@
-# Better-CI Development Roadmap
+# Stringr Development Roadmap
 
 ## Overview
 
-This roadmap outlines the development plan for Better-CI, an innovative CI/CD system that compiles pipeline definitions into debuggable executables.
+This roadmap outlines the development plan for Stringr, an innovative CI/CD system that compiles pipeline definitions into debuggable executables.
 
 ## Phase 1: Core Compiler (IN PROGRESS)
 
@@ -118,13 +118,13 @@ Provide out-of-the-box modules that can be used to compose the build steps.
 ## Phase 3: Product Website
 
 ### Goal
-Create a marketing and documentation website that explains Better-CI to potential users and provides comprehensive guides.
+Create a marketing and documentation website that explains Stringr to potential users and provides comprehensive guides.
 
 ### Key Pages
 
 1. **Landing Page**
    - Hero section explaining the core problem and solution
-   - Side-by-side comparison: YAML vs Better-CI
+   - Side-by-side comparison: YAML vs Stringr
    - Key benefits: Speed, Debuggability, Explicitness
    - Call-to-action: Get Started, View Examples
 
@@ -199,7 +199,7 @@ website/
 ## Phase 3: Platform Integrations
 
 ### Goal
-Enable Better-CI pipelines to run on existing CI/CD platforms while maintaining all the benefits of compiled executables.
+Enable Stringr pipelines to run on existing CI/CD platforms while maintaining all the benefits of compiled executables.
 
 ### Integration Architecture
 
@@ -225,8 +225,8 @@ Each integration is an adapter that:
 
 1. **GitHub Action Definition** (`action.yml`):
 ```yaml
-name: 'Better-CI'
-description: 'Run Better-CI compiled pipelines in GitHub Actions'
+name: 'Stringr'
+description: 'Run Stringr compiled pipelines in GitHub Actions'
 inputs:
   pipeline-executable:
     description: 'Path to the compiled pipeline executable'
@@ -262,9 +262,9 @@ jobs:
       - uses: actions/checkout@v4
 
       # Generate and compile the pipeline
-      - name: Setup Better-CI
+      - name: Setup Stringr
         run: |
-          better-ci generate pipeline.json ./ci-build
+          stringr generate pipeline.json ./ci-build
           cd ci-build && zig build
 
       # Run the pipeline
@@ -291,9 +291,9 @@ integrations/github-actions/
 
 1. **BuildKite Plugin** (`plugin.yml`):
 ```yaml
-name: Better-CI
-description: Run Better-CI pipelines on BuildKite
-author: better-ci
+name: Stringr
+description: Run Stringr pipelines on BuildKite
+author: stringr
 requirements: []
 configuration:
   properties:
@@ -316,7 +316,7 @@ configuration:
 steps:
   - label: "Build & Test"
     plugins:
-      - better-ci/better-ci#v1:
+      - stringr/stringr#v1:
           pipeline-definition: pipeline.json
 ```
 
@@ -338,20 +338,20 @@ integrations/buildkite/
 **Implementation Approach:**
 
 1. **Custom Runner**:
-   - TeamCity build step that executes Better-CI pipelines
-   - Parses Better-CI output for test results
+   - TeamCity build step that executes Stringr pipelines
+   - Parses Stringr output for test results
    - Integrates with TeamCity artifact system
 
 2. **Plugin Development** (optional):
    - TeamCity plugin for native integration
-   - UI for configuring Better-CI pipelines
+   - UI for configuring Stringr pipelines
    - Build feature for automatic pipeline generation
 
 **Repository Structure:**
 ```
 integrations/teamcity/
 ├── runner/
-│   ├── better-ci-runner.jar
+│   ├── stringr-runner.jar
 │   └── teamcity-plugin.xml
 ├── docs/
 └── examples/
@@ -367,16 +367,16 @@ integrations/teamcity/
 ```yaml
 # .gitlab-ci.yml
 include:
-  - remote: 'https://better-ci.dev/integrations/gitlab/template.yml'
+  - remote: 'https://stringr.dev/integrations/gitlab/template.yml'
 
-better-ci:
-  extends: .better-ci-template
+stringr:
+  extends: .stringr-template
   variables:
     PIPELINE_DEF: pipeline.json
 ```
 
 2. **Container Image**:
-   - Docker image with Better-CI and Zig pre-installed
+   - Docker image with Stringr and Zig pre-installed
    - Optimized for GitLab CI runners
 
 **Repository Structure:**
@@ -395,7 +395,7 @@ integrations/gitlab/
 **Implementation Approach:**
 
 1. **Jenkins Plugin**:
-   - Pipeline step for Better-CI
+   - Pipeline step for Stringr
    - Integration with Jenkins credentials
    - Artifact publishing
 
@@ -433,7 +433,7 @@ A universal shell wrapper that can run on any CI platform:
 
 ```bash
 #!/bin/bash
-# better-ci-wrapper.sh
+# stringr-wrapper.sh
 
 set -e
 
@@ -441,7 +441,7 @@ PIPELINE_DEF=${1:-pipeline.json}
 OUTPUT_DIR=${2:-generated-pipeline}
 
 # Generate pipeline
-better-ci generate "$PIPELINE_DEF" "$OUTPUT_DIR"
+stringr generate "$PIPELINE_DEF" "$OUTPUT_DIR"
 
 # Build pipeline executable
 cd "$OUTPUT_DIR"
@@ -453,7 +453,7 @@ zig build
 
 Usage on any platform:
 ```bash
-./better-ci-wrapper.sh pipeline.json
+./stringr-wrapper.sh pipeline.json
 ```
 
 ---
@@ -542,6 +542,6 @@ Once the project is ready for contributions, we welcome:
 1. **Pipeline Definition Format**: Stick with JSON or add YAML/TOML support?
 2. **Versioning Strategy**: How to handle breaking changes in pipeline definitions?
 3. **License**: MIT, Apache 2.0, or other?
-4. **Name**: Is "Better-CI" the final name or placeholder?
+4. **Name**: Is "Stringr" the final name or placeholder?
 5. **Hosting**: Where to host the compiler binary releases?
 6. **Commercial Strategy**: Open source core + paid features, or fully open?

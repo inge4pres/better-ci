@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) !void {
 
     // The core compiler executable
     const exe = b.addExecutable(.{
-        .name = "better-ci",
+        .name = "stringr",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) !void {
         run_cmd.addArgs(args);
     }
 
-    const run_step = b.step("run", "Run the better-ci compiler");
+    const run_step = b.step("run", "Run the stringr compiler");
     run_step.dependOn(&run_cmd.step);
 
     // Unit tests
@@ -94,7 +94,7 @@ pub fn build(b: *std.Build) !void {
         // Create the generate command for this example
         const generate_cmd = b.addRunArtifact(exe);
         generate_cmd.step.dependOn(b.getInstallStep());
-        generate_cmd.addArgs(&.{ "generate", json_path, output_path });
+        generate_cmd.addArgs(&.{ "generate", "--in", json_path, "--out", output_path });
         examples_step.dependOn(&generate_cmd.step);
     }
 }

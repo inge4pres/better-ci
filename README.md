@@ -1,4 +1,4 @@
-# Better-CI
+# Stringr
 
 > A faster, debuggable CI/CD system that compiles pipeline definitions into standalone executables.
 
@@ -12,7 +12,7 @@ Traditional CI/CD systems suffer from three major pain points:
 
 ## The Solution
 
-Better-CI uses **Zig** to compile your CI pipeline definitions into **debuggable, standalone executables**. Instead of YAML that runs in a black box, you get:
+Stringr uses **Zig** to compile your CI pipeline definitions into **debuggable, standalone executables**. Instead of YAML that runs in a black box, you get:
 
 - ✅ **Compiled executables** you can run locally
 - ✅ **Standard debugging** with gdb, lldb, or any debugger
@@ -53,7 +53,7 @@ Better-CI uses **Zig** to compile your CI pipeline definitions into **debuggable
 **2. Generate the pipeline executable**:
 
 ```bash
-better-ci generate pipeline.json
+stringr generate --in pipeline.json
 cd generated && zig build
 ```
 
@@ -76,7 +76,7 @@ Steps without dependencies run in parallel automatically - no configuration need
 Load global environment variables from files:
 
 ```bash
-better-ci generate pipeline.json --env-file .env
+stringr generate --in pipeline.json --env-file .env
 ```
 
 Step-specific variables can override global ones:
@@ -120,10 +120,10 @@ Each step writes to its own log file, preventing output corruption in parallel e
 ### Build from Source
 
 ```bash
-git clone https://github.com/inge4pres/better-ci.git
-cd better-ci/core
+git clone https://github.com/inge4pres/stringr.git
+cd stringr/core
 zig build
-./zig-out/bin/better-ci --help
+./zig-out/bin/stringr --help
 ```
 
 ## Supported Actions
@@ -225,9 +225,9 @@ Standalone Pipeline Executable
 
 ## Links
 
-- **Repository**: https://github.com/inge4pres/better-ci
-- **Issues**: https://github.com/inge4pres/better-ci/issues
+- **Repository**: https://github.com/inge4pres/stringr
+- **Issues**: https://github.com/inge4pres/stringr/issues
 
 ---
 
-*Better-CI: Because your CI/CD shouldn't be a black box.*
+*Stringr: Because your CI/CD shouldn't be a black box.*

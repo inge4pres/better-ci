@@ -34,8 +34,8 @@ pub fn buildZigZon(allocator: std.mem.Allocator, pipeline_name: []const u8) ![]c
         \\    .minimum_zig_version = "0.15.2",
         \\    .dependencies = .{{
         \\        .recipes = .{{
-        \\            .url = "git+https://github.com/inge4pres/better-ci?ref=main#516fdeadb0f13bd284444db7b2f59e64f9e60d19",
-        \\            .hash = "better_ci-0.0.1-X0u4hOP2AQCds5Jn9sONgf7F2vcpFQ-9GOfiMmPWOT4E",
+        \\            .url = "git+https://github.com/inge4pres/stringr?ref=main#516fdeadb0f13bd284444db7b2f59e64f9e60d19",
+        \\            .hash = "stringr-0.0.1-X0u4hOP2AQCds5Jn9sONgf7F2vcpFQ-9GOfiMmPWOT4E",
         \\        }},
         \\    }},
         \\    .paths = .{{
@@ -100,7 +100,26 @@ pub const build_middle =
 
 // Main.zig Templates
 
-pub const main_imports_header = "const std = @import(\"std\");\n";
+pub const main_imports_header =
+    \\const std = @import("std");
+    \\
+;
+
+pub fn mainLogDeclaration(pipeline_name: []const u8) ![]const u8 {
+    // Convert pipeline name to valid identifier (replace hyphens with underscores)
+    const safe_name = try std.heap.page_allocator.alloc(u8, pipeline_name.len);
+    defer std.heap.page_allocator.free(safe_name);
+
+    for (pipeline_name, 0..) |c, i| {
+        safe_name[i] = if (c == '-') '_' else c;
+    }
+
+    return std.fmt.allocPrint(
+        std.heap.page_allocator,
+        "const log = std.log.scoped(.{s});\n",
+        .{safe_name},
+    );
+}
 
 pub fn stepImport(step_id: []const u8) ![]const u8 {
     return std.fmt.allocPrint(
@@ -122,7 +141,7 @@ pub const main_function_header =
     \\    defer stdout.flush() catch {};
     \\
     \\    // Create log directory for step outputs
-    \\    const log_dir = try std.fmt.allocPrint(allocator, "/tmp/better-ci-
+    \\    const log_dir = try std.fmt.allocPrint(allocator, "/tmp/stringr-
 ;
 
 pub const main_log_dir_suffix =
@@ -145,7 +164,7 @@ pub const step_result_struct =
 ;
 
 pub const main_success_footer =
-    \\    try stdout.print("=== Pipeline completed successfully ===\n", .{});
+    \\    log.info("=== Pipeline completed successfully ===", .{});
     \\}
     \\
 ;
@@ -200,44 +219,74 @@ pub const ParallelStepExecution = struct {
 
 // Step implementation templates
 
-pub const step_header =
-    \\const std = @import("std");
-    \\
-    \\// Condition helper functions
-    \\fn checkEnvEquals(variable: []const u8, value: []const u8) bool {
-    \\    const env_value = std.process.getEnvVarOwned(std.heap.page_allocator, variable) catch |err| {
-    \\        if (err == error.EnvironmentVariableNotFound) return false;
-    \\        return false;
-    \\    };
-    \\    defer std.heap.page_allocator.free(env_value);
-    \\    return std.mem.eql(u8, env_value, value);
-    \\}
-    \\
-    \\fn checkEnvExists(variable: []const u8) bool {
-    \\    const env_value = std.process.getEnvVarOwned(std.heap.page_allocator, variable) catch |err| {
-    \\        if (err == error.EnvironmentVariableNotFound) return false;
-    \\        return false;
-    \\    };
-    \\    std.heap.page_allocator.free(env_value);
-    \\    return true;
-    \\}
-    \\
-    \\fn checkFileExists(path: []const u8) bool {
-    \\    std.fs.cwd().access(path, .{}) catch return false;
-    \\    return true;
-    \\}
-    \\
-    \\pub fn execute(allocator: std.mem.Allocator, log_path: []const u8) !void {
-    \\    // Create log file for step output
-    \\    const log_file = try std.fs.cwd().createFile(log_path, .{});
-    \\    defer log_file.close();
-    \\    var log_buffer: [4096]u8 = undefined;
-    \\    var log_writer = log_file.writer(&log_buffer);
-    \\    const stdout = &log_writer.interface;
-    \\    defer stdout.flush() catch {};
-    \\
-    \\
-;
+pub fn stepHeader(pipeline_name: []const u8, step_id: []const u8) ![]const u8 {
+    // Convert pipeline name to valid identifier (replace hyphens with underscores)
+    const safe_pipeline = try std.heap.page_allocator.alloc(u8, pipeline_name.len);
+    defer std.heap.page_allocator.free(safe_pipeline);
+
+    for (pipeline_name, 0..) |c, i| {
+        safe_pipeline[i] = if (c == '-') '_' else c;
+    }
+
+    // Convert step ID to valid identifier (replace hyphens with underscores)
+    const safe_id = try std.heap.page_allocator.alloc(u8, step_id.len);
+    defer std.heap.page_allocator.free(safe_id);
+
+    for (step_id, 0..) |c, i| {
+        safe_id[i] = if (c == '-') '_' else c;
+    }
+
+    // Combine pipeline name and step ID: pipeline_name.step_id
+    const scope_name = try std.fmt.allocPrint(
+        std.heap.page_allocator,
+        "{s}.{s}",
+        .{safe_pipeline, safe_id},
+    );
+    defer std.heap.page_allocator.free(scope_name);
+
+    return std.fmt.allocPrint(
+        std.heap.page_allocator,
+        \\const std = @import("std");
+        \\const log = std.log.scoped(.@"{s}");
+        \\
+        \\// Condition helper functions
+        \\fn checkEnvEquals(variable: []const u8, value: []const u8) bool {{
+        \\    const env_value = std.process.getEnvVarOwned(std.heap.page_allocator, variable) catch |err| {{
+        \\        if (err == error.EnvironmentVariableNotFound) return false;
+        \\        return false;
+        \\    }};
+        \\    defer std.heap.page_allocator.free(env_value);
+        \\    return std.mem.eql(u8, env_value, value);
+        \\}}
+        \\
+        \\fn checkEnvExists(variable: []const u8) bool {{
+        \\    const env_value = std.process.getEnvVarOwned(std.heap.page_allocator, variable) catch |err| {{
+        \\        if (err == error.EnvironmentVariableNotFound) return false;
+        \\        return false;
+        \\    }};
+        \\    std.heap.page_allocator.free(env_value);
+        \\    return true;
+        \\}}
+        \\
+        \\fn checkFileExists(path: []const u8) bool {{
+        \\    std.fs.cwd().access(path, .{{}}) catch return false;
+        \\    return true;
+        \\}}
+        \\
+        \\pub fn execute(allocator: std.mem.Allocator, log_path: []const u8) !void {{
+        \\    // Create log file for step output
+        \\    const log_file = try std.fs.cwd().createFile(log_path, .{{}});
+        \\    defer log_file.close();
+        \\    var log_buffer: [4096]u8 = undefined;
+        \\    var log_writer = log_file.writer(&log_buffer);
+        \\    const stdout = &log_writer.interface;
+        \\    defer stdout.flush() catch {{}};
+        \\
+        \\
+        ,
+        .{scope_name},
+    );
+}
 
 pub const step_env_setup =
     \\    // Create environment map
@@ -414,9 +463,10 @@ pub const ArtifactAction = struct {
     pub const copy_artifact =
         \\    // Copy artifact
         \\    _ = allocator;
+        \\    _ = stdout;
         \\    try std.fs.cwd().makePath(std.fs.path.dirname("{s}") orelse ".");
         \\    try std.fs.cwd().copyFile("{s}", std.fs.cwd(), "{s}", .{{}});
-        \\    try stdout.print("Artifact copied: {s} -> {s}\\n", .{{}});
+        \\    log.info("Artifact copied: {{s}} -> {{s}}", .{{"{s}", "{s}"}});
         \\
     ;
 };
@@ -424,9 +474,10 @@ pub const ArtifactAction = struct {
 pub const Recipe = struct {
     pub const not_implemented =
         \\    _ = allocator; // Recipe doesn't use allocator yet
+        \\    _ = stdout;
         \\    // Recipe: {s}
         \\    // TODO: Implement recipe
-        \\    try stdout.print("Recipe '{s}' not yet implemented\\n", .{{}});
+        \\    log.err("Recipe '{{s}}' not yet implemented", .{{"{s}"}});
         \\    return error.NotImplemented;
         \\
     ;

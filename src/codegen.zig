@@ -113,6 +113,13 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
 
     // Write imports
     try writer.writeAll(templates.main_imports_header);
+
+    // Add scoped log declaration
+    const log_decl = try templates.mainLogDeclaration(pipe.name);
+    defer std.heap.page_allocator.free(log_decl);
+    try writer.writeAll(log_decl);
+    try writer.writeAll("\n");
+
     for (pipe.steps) |step| {
         const safe_id = try sanitizeIdentifier(allocator, step.id);
         defer allocator.free(safe_id);
@@ -126,8 +133,8 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
     try writer.writeAll(templates.main_log_dir_suffix);
 
     // Print pipeline header
-    try writer.print("    try stdout.print(\"=== Pipeline: {s} ===\\n\", .{{}});\n", .{pipe.name});
-    try writer.print("    try stdout.print(\"Description: {s}\\n\\n\", .{{}});\n\n", .{pipe.description});
+    try writer.print("    log.info(\"=== Pipeline: {s} ===\", .{{}});\n", .{pipe.name});
+    try writer.print("    log.info(\"Description: {s}\", .{{}});\n\n", .{pipe.description});
 
     // Compute execution plan for parallel execution
     const plan = try graph.computeExecutionPlan(allocator, pipe);
@@ -185,7 +192,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
         }
 
         // Spawn threads
-        try writer.print("        try stdout.print(\"Running {d} steps in parallel...\\n\", .{{}});\n", .{level.len});
+        try writer.print("        log.info(\"Running {{d}} steps in parallel...\", .{{{d}}});\n", .{level.len});
         for (level, 0..) |_, i| {
             try writer.print("        threads[{d}] = try std.Thread.spawn(.{{}}, step{d}_fn, .{{&results[{d}], log_paths[{d}]}});\n", .{ i, i, i, i });
         }
@@ -201,7 +208,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             \\        for (results, 0..) |result, i| {{
             \\            if (result.err) |err| {{
             \\                const err_name = result.error_name orelse "UnknownError";
-            \\                try stdout.print("✗ Step {{s}} failed: {{s}}\n", .{{result.step_name, err_name}});
+            \\                log.err("✗ Step {{s}} failed: {{s}}", .{{result.step_name, err_name}});
             \\                // Display failed step's log
             \\                if (std.fs.cwd().readFileAlloc(allocator, log_paths[i], 1024 * 1024)) |log_content| {{
             \\                    defer allocator.free(log_content);
@@ -209,7 +216,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             \\                        try stdout.print("{{s}}", .{{log_content}});
             \\                    }}
             \\                }} else |read_err| {{
-            \\                    try stdout.print("Warning: Could not read log: {{any}}\n", .{{read_err}});
+            \\                    log.warn("Could not read log: {{any}}", .{{read_err}});
             \\                }}
             \\                return err;
             \\            }}
@@ -220,9 +227,9 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             \\                    try stdout.print("{{s}}", .{{log_content}});
             \\                }}
             \\            }} else |read_err| {{
-            \\                try stdout.print("Warning: Could not read log for step {{s}}: {{any}}\n", .{{result.step_name, read_err}});
+            \\                log.warn("Could not read log for step {{s}}: {{any}}", .{{result.step_name, read_err}});
             \\            }}
-            \\            try stdout.print("✓ Step {{s}} completed\n", .{{result.step_name}});
+            \\            log.info("✓ Step {{s}} completed", .{{result.step_name}});
             \\        }}
             \\
         , .{});
@@ -253,12 +260,14 @@ fn generateStepFiles(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, outp
         const writer = &file_writer.interface;
         defer writer.flush() catch {};
 
-        try generateStepImplementation(writer, step, pipe.environment);
+        try generateStepImplementation(writer, pipe.name, step, pipe.environment);
     }
 }
 
-fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step, global_env: ?std.StringHashMap([]const u8)) !void {
-    try writer.writeAll(templates.step_header);
+fn generateStepImplementation(writer: *std.Io.Writer, pipeline_name: []const u8, step: pipeline.Step, global_env: ?std.StringHashMap([]const u8)) !void {
+    const step_header = try templates.stepHeader(pipeline_name, step.id);
+    defer std.heap.page_allocator.free(step_header);
+    try writer.writeAll(step_header);
 
     // If there's a condition, add check at the start
     if (step.condition) |cond| {
@@ -268,10 +277,10 @@ fn generateStepImplementation(writer: *std.Io.Writer, step: pipeline.Step, globa
         try writer.print("    // Conditional execution\n", .{});
         try writer.print("    const should_execute = {s};\n", .{cond_code});
         try writer.writeAll("    if (!should_execute) {\n");
-        try writer.writeAll("        try stdout.print(\"Condition not met, skipping step\\n\", .{});\n");
+        try writer.writeAll("        log.info(\"Condition not met, skipping step\", .{});\n");
         try writer.writeAll("        return;\n");
         try writer.writeAll("    }\n");
-        try writer.writeAll("    try stdout.print(\"Condition met, executing step\\n\", .{});\n\n");
+        try writer.writeAll("    log.info(\"Condition met, executing step\", .{});\n\n");
     }
 
     // Determine if this action type supports environment variables

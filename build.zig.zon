@@ -1,5 +1,5 @@
 .{
-    .name = .better_ci,
+    .name = .stringr,
     .version = "0.0.1",
     .dependencies = .{
         .clap = .{
@@ -15,5 +15,5 @@
         "README.md",
         "examples",
     },
-    .fingerprint = 0x9b9b08384b84b5f,
+    .fingerprint = 0xc39d5a6323ef02d6,
 }

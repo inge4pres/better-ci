@@ -7,7 +7,7 @@ const Recipe = @import("Recipe.zig").Recipe;
 /// - action (required): "restore" or "save"
 /// - key (required): Cache key identifier (e.g., "node-modules-v1")
 /// - paths (required): Comma-separated list of paths to cache
-/// - cache_dir: Directory to store cache (default: "~/.cache/better-ci")
+/// - cache_dir: Directory to store cache (default: "~/.cache/stringr")
 pub const Cache = struct {
     config: std.StringHashMap([]const u8),
     allocator: std.mem.Allocator,
@@ -30,11 +30,11 @@ pub const Cache = struct {
 
         const cache_dir = self.config.get("cache_dir") orelse blk: {
             const home = std.posix.getenv("HOME") orelse ".";
-            if (std.fmt.allocPrint(allocator, "{s}/.cache/better-ci", .{home})) |dir| {
+            if (std.fmt.allocPrint(allocator, "{s}/.cache/stringr", .{home})) |dir| {
                 cache_dir_allocated = dir;
                 break :blk dir;
             } else |_| {
-                break :blk ".cache/better-ci";
+                break :blk ".cache/stringr";
             }
         };
 

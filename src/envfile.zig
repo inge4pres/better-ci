@@ -222,7 +222,7 @@ test "parse env file - integration" {
     const allocator = testing.allocator;
 
     // Create temporary .env file
-    const temp_path = "/tmp/test-better-ci.env";
+    const temp_path = "/tmp/test-stringr.env";
     const file = try std.fs.cwd().createFile(temp_path, .{});
     defer std.fs.cwd().deleteFile(temp_path) catch {};
 

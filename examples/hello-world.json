@@ -7,7 +7,7 @@
       "name": "Say Hello",
       "action": {
         "type": "shell",
-        "command": "echo 'Hello from Better-CI!'"
+        "command": "echo 'Hello from Stringr!'"
       }
     },
     {

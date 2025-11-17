@@ -1,4 +1,4 @@
-# Better-CI Examples
+# Stringr Examples
 
 This directory contains example pipeline definitions and their generated executables.
 
@@ -23,7 +23,7 @@ zig build examples
 ```
 
 This will:
-1. Build the `better-ci` compiler
+1. Build the `stringr` compiler
 2. Generate pipeline executables for all `.json` definitions
 3. Place them in `examples/_generated/`
 

@@ -32,7 +32,7 @@ pub fn main() !void {
     defer iter.deinit();
 
     // Skip the executable name
-    iter.skip();
+    _ = iter.skip();
 
     const main_parsers = .{
         .command = clap.parsers.enumeration(SubCommands),
@@ -76,7 +76,7 @@ pub fn main() !void {
             try stdout.flush();
         },
         .version => {
-            try stdout.print("better-ci version 0.1.0\n", .{});
+            try stdout.print("stringr version 0.1.0\n", .{});
             try stdout.flush();
         },
     }
@@ -90,7 +90,8 @@ fn runGenerate(
 ) !void {
     // Define parameters for the generate subcommand
     const params = comptime clap.parseParamsComptime(
-        \\<STR>...              Positional arguments: <file> [output-dir]
+        \\--in <STR>            Input pipeline definition file (required)
+        \\--out <STR>           Output directory (default: generated)
         \\--env-file <STR>      Load global environment variables from file
         \\-h, --help            Display this help and exit
         \\
@@ -117,23 +118,18 @@ fn runGenerate(
         return;
     }
 
-    // Get required positional argument
-    if (res.positionals[0].len == 0) {
-        try stderr.print("Error: generate command requires a pipeline definition file\n\n", .{});
+    // Get required --in argument
+    const definition_file = res.args.in orelse {
+        try stderr.print("Error: --in flag is required (input pipeline definition file)\n\n", .{});
         try printGenerateUsage(stderr);
         try stderr.flush();
         std.process.exit(1);
-    }
+    };
 
-    const definition_file = res.positionals[0][0];
+    // Get optional --out argument with default
+    const output_dir = res.args.out orelse "generated";
 
-    // Get optional positional argument with default
-    const output_dir = if (res.positionals[0].len > 1)
-        res.positionals[0][1]
-    else
-        "generated";
-
-    // Get optional flag argument
+    // Get optional --env-file argument
     const env_file = res.args.@"env-file";
 
     try generatePipeline(allocator, definition_file, output_dir, env_file, stdout);
@@ -175,13 +171,13 @@ fn generatePipeline(
 
 fn printUsage(writer: *std.Io.Writer) !void {
     try writer.writeAll(
-        \\better-ci - A faster, debuggable CI/CD system
+        \\stringr - A faster, debuggable CI/CD system
         \\
         \\Usage:
-        \\  better-ci <command> [options]
+        \\  stringr <command> [options]
         \\
         \\Commands:
-        \\  generate <file> [output-dir] [--env-file <path>]
+        \\  generate --in <file> [--out <dir>] [--env-file <path>]
         \\    Generate a pipeline executable from definition
         \\
         \\  help
@@ -190,37 +186,34 @@ fn printUsage(writer: *std.Io.Writer) !void {
         \\  version
         \\    Show version information
         \\
-        \\Options:
-        \\  --env-file <path>    Load global environment variables from file
-        \\
         \\Examples:
-        \\  better-ci generate pipeline.json
-        \\  better-ci generate pipeline.json ./my-pipeline
-        \\  better-ci generate pipeline.json --env-file .env
-        \\  better-ci generate pipeline.json ./my-pipeline --env-file production.env
+        \\  stringr generate --in pipeline.json
+        \\  stringr generate --in pipeline.json --out ./my-pipeline
+        \\  stringr generate --in pipeline.json --env-file .env
+        \\  stringr generate --in pipeline.json --out ./my-pipeline --env-file production.env
         \\
     );
 }
 
 fn printGenerateUsage(writer: *std.Io.Writer) !void {
     try writer.writeAll(
-        \\Usage: better-ci generate <file> [output-dir] [options]
+        \\Usage: stringr generate --in <file> [--out <dir>] [options]
         \\
         \\Generate a pipeline executable from a JSON definition file
         \\
-        \\Arguments:
-        \\  <file>           Pipeline definition file (required)
-        \\  [output-dir]     Output directory (default: generated)
+        \\Required flags:
+        \\  --in <file>        Pipeline definition file
         \\
-        \\Options:
+        \\Optional flags:
+        \\  --out <dir>        Output directory (default: generated)
         \\  --env-file <path>  Load global environment variables from file
         \\  -h, --help         Display this help and exit
         \\
         \\Examples:
-        \\  better-ci generate pipeline.json
-        \\  better-ci generate pipeline.json ./my-pipeline
-        \\  better-ci generate pipeline.json --env-file .env
-        \\  better-ci generate pipeline.json ./my-pipeline --env-file production.env
+        \\  stringr generate --in pipeline.json
+        \\  stringr generate --in pipeline.json --out ./my-pipeline
+        \\  stringr generate --in pipeline.json --env-file .env
+        \\  stringr generate --in pipeline.json --out ./my-pipeline --env-file production.env
         \\
     );
 }

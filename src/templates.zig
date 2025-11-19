@@ -35,7 +35,7 @@ pub fn buildZigZon(allocator: std.mem.Allocator, pipeline_name: []const u8) ![]c
         \\    .dependencies = .{{
         \\        .recipes = .{{
         \\            .url = "git+https://github.com/inge4pres/stringr?ref=main#516fdeadb0f13bd284444db7b2f59e64f9e60d19",
-        \\            .hash = "stringr-0.0.1-X0u4hOP2AQCds5Jn9sONgf7F2vcpFQ-9GOfiMmPWOT4E",
+        \\            .hash = "better_ci-0.0.1-X0u4hGctAgDgwxQ89bOff9mi74ip0amLNAs8iU32vdeU",
         \\        }},
         \\    }},
         \\    .paths = .{{
@@ -135,22 +135,9 @@ pub const main_function_header =
     \\    defer _ = gpa.deinit();
     \\    const allocator = gpa.allocator();
     \\
-    \\    var stdout_buffer: [4096]u8 = undefined;
-    \\    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    \\    const stdout = &stdout_writer.interface;
-    \\    defer stdout.flush() catch {};
-    \\
-    \\    // Create log directory for step outputs
-    \\    const log_dir = try std.fmt.allocPrint(allocator, "/tmp/stringr-
 ;
 
-pub const main_log_dir_suffix =
-    \\-{d}", .{std.time.milliTimestamp()});
-    \\    defer allocator.free(log_dir);
-    \\    try std.fs.cwd().makePath(log_dir);
-    \\    defer std.fs.cwd().deleteTree(log_dir) catch {};
-    \\
-;
+pub const main_log_dir_suffix = "";
 
 pub const step_result_struct =
     \\    // Step execution results
@@ -273,14 +260,7 @@ pub fn stepHeader(pipeline_name: []const u8, step_id: []const u8) ![]const u8 {
         \\    return true;
         \\}}
         \\
-        \\pub fn execute(allocator: std.mem.Allocator, log_path: []const u8) !void {{
-        \\    // Create log file for step output
-        \\    const log_file = try std.fs.cwd().createFile(log_path, .{{}});
-        \\    defer log_file.close();
-        \\    var log_buffer: [4096]u8 = undefined;
-        \\    var log_writer = log_file.writer(&log_buffer);
-        \\    const stdout = &log_writer.interface;
-        \\    defer stdout.flush() catch {{}};
+        \\pub fn execute(allocator: std.mem.Allocator) !void {{
         \\
         \\
         ,
@@ -329,10 +309,10 @@ pub const ShellAction = struct {
         \\    defer allocator.free(result.stderr);
         \\
         \\    if (result.stdout.len > 0) {
-        \\        try stdout.print("{s}", .{result.stdout});
+        \\        log.info("{s}", .{result.stdout});
         \\    }
         \\    if (result.stderr.len > 0) {
-        \\        try stdout.print("{s}", .{result.stderr});
+        \\        log.err("{s}", .{result.stderr});
         \\    }
         \\
         \\    switch (result.term) {
@@ -365,8 +345,8 @@ pub const CompileAction = struct {
         \\    defer allocator.free(result.stdout);
         \\    defer allocator.free(result.stderr);
         \\
-        \\    if (result.stdout.len > 0) try stdout.print("{s}", .{result.stdout});
-        \\    if (result.stderr.len > 0) try stdout.print("{s}", .{result.stderr});
+        \\    if (result.stdout.len > 0) log.info("{s}", .{result.stdout});
+        \\    if (result.stderr.len > 0) log.err("{s}", .{result.stderr});
         \\
         \\    switch (result.term) {
         \\        .Exited => |code| if (code != 0) return error.CompileFailed,
@@ -415,8 +395,8 @@ pub const TestAction = struct {
         \\    defer allocator.free(result.stdout);
         \\    defer allocator.free(result.stderr);
         \\
-        \\    if (result.stdout.len > 0) try stdout.print("{s}", .{result.stdout});
-        \\    if (result.stderr.len > 0) try stdout.print("{s}", .{result.stderr});
+        \\    if (result.stdout.len > 0) log.info("{s}", .{result.stdout});
+        \\    if (result.stderr.len > 0) log.err("{s}", .{result.stderr});
         \\
         \\    switch (result.term) {
         \\        .Exited => |code| if (code != 0) return error.TestsFailed,
@@ -448,8 +428,8 @@ pub const CheckoutAction = struct {
         \\    defer allocator.free(result.stdout);
         \\    defer allocator.free(result.stderr);
         \\
-        \\    if (result.stdout.len > 0) try stdout.print("{s}", .{result.stdout});
-        \\    if (result.stderr.len > 0) try stdout.print("{s}", .{result.stderr});
+        \\    if (result.stdout.len > 0) log.info("{s}", .{result.stdout});
+        \\    if (result.stderr.len > 0) log.err("{s}", .{result.stderr});
         \\
         \\    switch (result.term) {
         \\        .Exited => |code| if (code != 0) return error.CheckoutFailed,
@@ -463,7 +443,6 @@ pub const ArtifactAction = struct {
     pub const copy_artifact =
         \\    // Copy artifact
         \\    _ = allocator;
-        \\    _ = stdout;
         \\    try std.fs.cwd().makePath(std.fs.path.dirname("{s}") orelse ".");
         \\    try std.fs.cwd().copyFile("{s}", std.fs.cwd(), "{s}", .{{}});
         \\    log.info("Artifact copied: {{s}} -> {{s}}", .{{"{s}", "{s}"}});
@@ -474,7 +453,6 @@ pub const ArtifactAction = struct {
 pub const Recipe = struct {
     pub const not_implemented =
         \\    _ = allocator; // Recipe doesn't use allocator yet
-        \\    _ = stdout;
         \\    // Recipe: {s}
         \\    // TODO: Implement recipe
         \\    log.err("Recipe '{{s}}' not yet implemented", .{{"{s}"}});

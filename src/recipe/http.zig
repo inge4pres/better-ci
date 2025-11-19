@@ -1,6 +1,8 @@
 const std = @import("std");
 const Recipe = @import("Recipe.zig").Recipe;
 
+const log = std.log.scoped(.http);
+
 /// HTTP recipe - make HTTP requests (webhooks, API calls, etc.)
 ///
 /// Supported parameters:
@@ -23,7 +25,7 @@ pub const Http = struct {
         };
     }
 
-    pub fn run(self: *Http, allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
+    pub fn run(self: *Http, allocator: std.mem.Allocator) !void {
         const url = self.config.get("url") orelse return error.MissingHttpUrl;
         const method = self.config.get("method") orelse "GET";
         const headers = self.config.get("headers");
@@ -33,7 +35,7 @@ pub const Http = struct {
         const fail_on_error = self.config.get("fail_on_error") orelse "true";
         const timeout = self.config.get("timeout") orelse "30";
 
-        try writer.print("HTTP {s} {s}\n", .{ method, url });
+        log.info("HTTP {s} {s}", .{ method, url });
 
         var curl_args: std.ArrayList([]const u8) = .empty;
         defer curl_args.deinit(allocator);
@@ -83,7 +85,7 @@ pub const Http = struct {
         if (output) |out| {
             try curl_args.append(allocator, "-o");
             try curl_args.append(allocator, out);
-            try writer.print("Saving response to: {s}\n", .{out});
+            log.info("Saving response to: {s}", .{out});
         }
 
         // URL (must be last)
@@ -104,26 +106,26 @@ pub const Http = struct {
         const term = try child.wait();
 
         if (stdout_buffer.items.len > 0 and output == null) {
-            try writer.print("{s}", .{stdout_buffer.items});
+            log.info("{s}", .{stdout_buffer.items});
         }
         if (stderr_buffer.items.len > 0) {
-            try writer.print("{s}", .{stderr_buffer.items});
+            log.err("{s}", .{stderr_buffer.items});
         }
 
         switch (term) {
             .Exited => |code| {
                 if (code != 0) {
-                    try writer.print("HTTP request failed with exit code {d}\n", .{code});
+                    log.err("HTTP request failed with exit code {d}", .{code});
                     return error.HttpRequestFailed;
                 }
             },
             else => {
-                try writer.print("HTTP request terminated abnormally\n", .{});
+                log.err("HTTP request terminated abnormally", .{});
                 return error.HttpRequestFailed;
             },
         }
 
-        try writer.print("HTTP request completed successfully\n", .{});
+        log.info("HTTP request completed successfully", .{});
     }
 
     pub fn deinit(self: *Http, allocator: std.mem.Allocator) void {
@@ -139,9 +141,9 @@ pub const Http = struct {
         self.* = http;
     }
 
-    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator, writer: *std.Io.Writer) anyerror!void {
+    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror!void {
         const self: *Http = @ptrCast(@alignCast(ptr));
-        try self.run(allocator, writer);
+        try self.run(allocator);
     }
 
     fn deinitVTable(ptr: *anyopaque, allocator: std.mem.Allocator) void {

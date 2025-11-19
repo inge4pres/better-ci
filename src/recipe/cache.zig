@@ -1,6 +1,8 @@
 const std = @import("std");
 const Recipe = @import("Recipe.zig").Recipe;
 
+const log = std.log.scoped(.cache);
+
 /// Cache recipe - cache files and directories to speed up builds
 ///
 /// Supported parameters:
@@ -19,7 +21,7 @@ pub const Cache = struct {
         };
     }
 
-    pub fn run(self: *Cache, allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
+    pub fn run(self: *Cache, allocator: std.mem.Allocator) !void {
         const action = self.config.get("action") orelse return error.MissingCacheAction;
         const key = self.config.get("key") orelse return error.MissingCacheKey;
         const paths = self.config.get("paths") orelse return error.MissingCachePaths;
@@ -38,7 +40,7 @@ pub const Cache = struct {
             }
         };
 
-        try writer.print("Cache {s}: key={s}\n", .{ action, key });
+        log.info("Cache {s}: key={s}", .{ action, key });
 
         if (std.mem.eql(u8, action, "restore")) {
             // Restore cache
@@ -53,11 +55,11 @@ pub const Cache = struct {
             };
 
             if (!cache_exists) {
-                try writer.print("Cache miss: {s} not found\n", .{key});
+                log.info("Cache miss: {s} not found", .{key});
                 return;
             }
 
-            try writer.print("Cache hit: restoring from {s}\n", .{cache_file});
+            log.info("Cache hit: restoring from {s}", .{cache_file});
 
             var restore_args = [_][]const u8{ "tar", "xzf", cache_file };
             var child = std.process.Child.init(&restore_args, allocator);
@@ -77,20 +79,20 @@ pub const Cache = struct {
             switch (term) {
                 .Exited => |code| {
                     if (code != 0) {
-                        try writer.print("Cache restore failed with exit code {d}\n", .{code});
+                        log.err("Cache restore failed with exit code {d}", .{code});
                         if (stderr_buffer.items.len > 0) {
-                            try writer.print("{s}", .{stderr_buffer.items});
+                            log.err("{s}", .{stderr_buffer.items});
                         }
                         return error.CacheRestoreFailed;
                     }
                 },
                 else => {
-                    try writer.print("Cache restore terminated abnormally\n", .{});
+                    log.err("Cache restore terminated abnormally", .{});
                     return error.CacheRestoreFailed;
                 },
             }
 
-            try writer.print("Cache restored successfully\n", .{});
+            log.info("Cache restored successfully", .{});
         } else if (std.mem.eql(u8, action, "save")) {
             // Save cache
             try std.fs.cwd().makePath(cache_dir);
@@ -98,7 +100,7 @@ pub const Cache = struct {
             const cache_file = try std.fmt.allocPrint(allocator, "{s}/{s}.tar.gz", .{ cache_dir, key });
             defer allocator.free(cache_file);
 
-            try writer.print("Saving cache to {s}\n", .{cache_file});
+            log.info("Saving cache to {s}", .{cache_file});
 
             var save_args: std.ArrayList([]const u8) = .empty;
             defer save_args.deinit(allocator);
@@ -114,7 +116,7 @@ pub const Cache = struct {
                 if (trimmed.len > 0) {
                     // Check if path exists before adding
                     std.fs.cwd().access(trimmed, .{}) catch {
-                        try writer.print("Warning: path {s} does not exist, skipping\n", .{trimmed});
+                        log.warn("Path {s} does not exist, skipping", .{trimmed});
                         continue;
                     };
                     try save_args.append(allocator, trimmed);
@@ -122,7 +124,7 @@ pub const Cache = struct {
             }
 
             if (save_args.items.len <= 3) {
-                try writer.print("No valid paths to cache\n", .{});
+                log.info("No valid paths to cache", .{});
                 return;
             }
 
@@ -143,22 +145,22 @@ pub const Cache = struct {
             switch (term) {
                 .Exited => |code| {
                     if (code != 0) {
-                        try writer.print("Cache save failed with exit code {d}\n", .{code});
+                        log.err("Cache save failed with exit code {d}", .{code});
                         if (stderr_buffer.items.len > 0) {
-                            try writer.print("{s}", .{stderr_buffer.items});
+                            log.err("{s}", .{stderr_buffer.items});
                         }
                         return error.CacheSaveFailed;
                     }
                 },
                 else => {
-                    try writer.print("Cache save terminated abnormally\n", .{});
+                    log.err("Cache save terminated abnormally", .{});
                     return error.CacheSaveFailed;
                 },
             }
 
-            try writer.print("Cache saved successfully\n", .{});
+            log.info("Cache saved successfully", .{});
         } else {
-            try writer.print("Invalid cache action: {s} (must be 'restore' or 'save')\n", .{action});
+            log.err("Invalid cache action: {s} (must be 'restore' or 'save')", .{action});
             return error.InvalidCacheAction;
         }
     }
@@ -176,9 +178,9 @@ pub const Cache = struct {
         self.* = cache;
     }
 
-    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator, writer: *std.Io.Writer) anyerror!void {
+    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror!void {
         const self: *Cache = @ptrCast(@alignCast(ptr));
-        try self.run(allocator, writer);
+        try self.run(allocator);
     }
 
     fn deinitVTable(ptr: *anyopaque, allocator: std.mem.Allocator) void {

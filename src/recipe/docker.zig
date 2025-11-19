@@ -1,6 +1,8 @@
 const std = @import("std");
 const Recipe = @import("Recipe.zig").Recipe;
 
+const log = std.log.scoped(.docker);
+
 /// Docker recipe - run commands in Docker containers
 ///
 /// Supported parameters:
@@ -24,7 +26,7 @@ pub const Docker = struct {
         };
     }
 
-    pub fn run(self: *Docker, allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
+    pub fn run(self: *Docker, allocator: std.mem.Allocator) !void {
         const image = self.config.get("image") orelse return error.MissingDockerImage;
         const command = self.config.get("command");
         const working_dir = self.config.get("working_dir");
@@ -107,9 +109,9 @@ pub const Docker = struct {
             try docker_args.append(allocator, cmd);
         }
 
-        try writer.print("Running Docker container: {s}\n", .{image});
+        log.info("Running Docker container: {s}", .{image});
         if (command) |cmd| {
-            try writer.print("Command: {s}\n", .{cmd});
+            log.info("Command: {s}", .{cmd});
         }
 
         var child = std.process.Child.init(docker_args.items, allocator);
@@ -128,26 +130,26 @@ pub const Docker = struct {
         const term = try child.wait();
 
         if (stdout_buffer.items.len > 0) {
-            try writer.print("{s}", .{stdout_buffer.items});
+            log.info("{s}", .{stdout_buffer.items});
         }
         if (stderr_buffer.items.len > 0) {
-            try writer.print("{s}", .{stderr_buffer.items});
+            log.err("{s}", .{stderr_buffer.items});
         }
 
         switch (term) {
             .Exited => |code| {
                 if (code != 0) {
-                    try writer.print("Docker command failed with exit code {d}\n", .{code});
+                    log.err("Docker command failed with exit code {d}", .{code});
                     return error.DockerCommandFailed;
                 }
             },
             else => {
-                try writer.print("Docker command terminated abnormally\n", .{});
+                log.err("Docker command terminated abnormally", .{});
                 return error.DockerCommandFailed;
             },
         }
 
-        try writer.print("Docker container completed successfully\n", .{});
+        log.info("Docker container completed successfully", .{});
     }
 
     pub fn deinit(self: *Docker, allocator: std.mem.Allocator) void {
@@ -163,9 +165,9 @@ pub const Docker = struct {
         self.* = docker;
     }
 
-    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator, writer: *std.Io.Writer) anyerror!void {
+    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror!void {
         const self: *Docker = @ptrCast(@alignCast(ptr));
-        try self.run(allocator, writer);
+        try self.run(allocator);
     }
 
     fn deinitVTable(ptr: *anyopaque, allocator: std.mem.Allocator) void {

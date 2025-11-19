@@ -13,7 +13,7 @@ const std = @import("std");
 /// var docker = try recipe_mod.docker.Docker.init(allocator, config);
 /// defer docker.deinit(allocator);
 ///
-/// try docker.recipe().run(allocator, writer);
+/// try docker.recipe().run(allocator);
 /// ```
 pub const Recipe = struct {
     ptr: *anyopaque,
@@ -24,7 +24,7 @@ pub const Recipe = struct {
         init: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, config: std.StringHashMap([]const u8)) anyerror!void,
 
         /// Execute the recipe action
-        run: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, writer: *std.Io.Writer) anyerror!void,
+        run: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator) anyerror!void,
 
         /// Clean up recipe resources
         deinit: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator) void,
@@ -34,8 +34,8 @@ pub const Recipe = struct {
         return self.vtable.init(self.ptr, allocator, config);
     }
 
-    pub fn run(self: Recipe, allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
-        return self.vtable.run(self.ptr, allocator, writer);
+    pub fn run(self: Recipe, allocator: std.mem.Allocator) !void {
+        return self.vtable.run(self.ptr, allocator);
     }
 
     pub fn deinit(self: Recipe, allocator: std.mem.Allocator) void {

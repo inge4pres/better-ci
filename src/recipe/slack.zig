@@ -1,6 +1,8 @@
 const std = @import("std");
 const Recipe = @import("Recipe.zig").Recipe;
 
+const log = std.log.scoped(.slack);
+
 /// Slack recipe - send notifications to Slack
 ///
 /// Supported parameters:
@@ -21,11 +23,11 @@ pub const Slack = struct {
         };
     }
 
-    pub fn run(self: *Slack, allocator: std.mem.Allocator, writer: *std.Io.Writer) !void {
+    pub fn run(self: *Slack, allocator: std.mem.Allocator) !void {
         const webhook_url = self.config.get("webhook_url") orelse blk: {
             const env_url = std.posix.getenv("SLACK_WEBHOOK_URL");
             if (env_url == null) {
-                try writer.print("Error: SLACK_WEBHOOK_URL not set and webhook_url parameter not provided\n", .{});
+                log.err("SLACK_WEBHOOK_URL not set and webhook_url parameter not provided", .{});
                 return error.MissingSlackWebhookUrl;
             }
             break :blk env_url.?;
@@ -36,9 +38,9 @@ pub const Slack = struct {
         const icon_emoji = self.config.get("icon_emoji");
         const color = self.config.get("color");
 
-        try writer.print("Sending Slack notification\n", .{});
+        log.info("Sending Slack notification", .{});
         if (channel) |ch| {
-            try writer.print("Channel: {s}\n", .{ch});
+            log.info("Channel: {s}", .{ch});
         }
 
         // Build JSON payload
@@ -131,23 +133,23 @@ pub const Slack = struct {
         const term = try child.wait();
 
         if (stderr_buffer.items.len > 0) {
-            try writer.print("{s}", .{stderr_buffer.items});
+            log.err("{s}", .{stderr_buffer.items});
         }
 
         switch (term) {
             .Exited => |code| {
                 if (code != 0) {
-                    try writer.print("Slack notification failed with exit code {d}\n", .{code});
+                    log.err("Slack notification failed with exit code {d}", .{code});
                     return error.SlackNotificationFailed;
                 }
             },
             else => {
-                try writer.print("Slack notification terminated abnormally\n", .{});
+                log.err("Slack notification terminated abnormally", .{});
                 return error.SlackNotificationFailed;
             },
         }
 
-        try writer.print("Slack notification sent successfully\n", .{});
+        log.info("Slack notification sent successfully", .{});
     }
 
     pub fn deinit(self: *Slack, allocator: std.mem.Allocator) void {
@@ -163,9 +165,9 @@ pub const Slack = struct {
         self.* = slack;
     }
 
-    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator, writer: *std.Io.Writer) anyerror!void {
+    fn runVTable(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror!void {
         const self: *Slack = @ptrCast(@alignCast(ptr));
-        try self.run(allocator, writer);
+        try self.run(allocator);
     }
 
     fn deinitVTable(ptr: *anyopaque, allocator: std.mem.Allocator) void {

@@ -129,8 +129,6 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
 
     // Write main function header
     try writer.writeAll(templates.main_function_header);
-    try writer.print("{s}", .{pipe.name});
-    try writer.writeAll(templates.main_log_dir_suffix);
 
     // Print pipeline header
     try writer.print("    log.info(\"=== Pipeline: {s} ===\", .{{}});\n", .{pipe.name});
@@ -154,18 +152,9 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             \\        var results = try allocator.alloc(StepResult, {d});
             \\        defer allocator.free(results);
             \\        @memset(results, .{{ .step_name = "", .error_name = null, .err = null }});
-            \\        var log_paths = try allocator.alloc([]const u8, {d});
-            \\        defer allocator.free(log_paths);
             \\
             \\
-        , .{ level.len, level.len, level.len });
-
-        // Create log paths for each step
-        for (level, 0..) |step_idx, i| {
-            const step = pipe.steps[step_idx];
-            try writer.print("        log_paths[{d}] = try std.fmt.allocPrint(allocator, \"{{s}}/step_{s}.log\", .{{log_dir}});\n", .{ i, step.id });
-        }
-        try writer.print("        defer for (log_paths) |lp| allocator.free(lp);\n\n", .{});
+        , .{ level.len, level.len });
 
         // Define thread function for each step in this level
         for (level, 0..) |step_idx, i| {
@@ -174,12 +163,12 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             defer allocator.free(safe_id);
             try writer.print(
                 \\        const step{d}_fn = struct {{
-                \\            fn run(result: *StepResult, log_path: []const u8) void {{
+                \\            fn run(result: *StepResult) void {{
                 \\                var thread_gpa = std.heap.GeneralPurposeAllocator(.{{}}){{}};
                 \\                defer _ = thread_gpa.deinit();
                 \\                const thread_allocator = thread_gpa.allocator();
                 \\                result.step_name = "{s}";
-                \\                step_{s}.execute(thread_allocator, log_path) catch |err| {{
+                \\                step_{s}.execute(thread_allocator) catch |err| {{
                 \\                    result.err = err;
                 \\                    result.error_name = "StepExecutionFailed";
                 \\                    return;
@@ -194,7 +183,7 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
         // Spawn threads
         try writer.print("        log.info(\"Running {{d}} steps in parallel...\", .{{{d}}});\n", .{level.len});
         for (level, 0..) |_, i| {
-            try writer.print("        threads[{d}] = try std.Thread.spawn(.{{}}, step{d}_fn, .{{&results[{d}], log_paths[{d}]}});\n", .{ i, i, i, i });
+            try writer.print("        threads[{d}] = try std.Thread.spawn(.{{}}, step{d}_fn, .{{&results[{d}]}});\n", .{ i, i, i });
         }
 
         // Wait for all threads
@@ -203,42 +192,19 @@ fn generateMainZig(allocator: std.mem.Allocator, pipe: pipeline.Pipeline, output
             try writer.print("        threads[{d}].join();\n", .{i});
         }
 
-        // Check for errors and display logs using a for loop
+        // Check for errors
         try writer.print(
-            \\        for (results, 0..) |result, i| {{
+            \\        for (results) |result| {{
             \\            if (result.err) |err| {{
             \\                const err_name = result.error_name orelse "UnknownError";
             \\                log.err("✗ Step {{s}} failed: {{s}}", .{{result.step_name, err_name}});
-            \\                // Display failed step's log
-            \\                if (std.fs.cwd().readFileAlloc(allocator, log_paths[i], 1024 * 1024)) |log_content| {{
-            \\                    defer allocator.free(log_content);
-            \\                    if (log_content.len > 0) {{
-            \\                        try stdout.print("{{s}}", .{{log_content}});
-            \\                    }}
-            \\                }} else |read_err| {{
-            \\                    log.warn("Could not read log: {{any}}", .{{read_err}});
-            \\                }}
             \\                return err;
-            \\            }}
-            \\            // Display successful step's log
-            \\            if (std.fs.cwd().readFileAlloc(allocator, log_paths[i], 1024 * 1024)) |log_content| {{
-            \\                defer allocator.free(log_content);
-            \\                if (log_content.len > 0) {{
-            \\                    try stdout.print("{{s}}", .{{log_content}});
-            \\                }}
-            \\            }} else |read_err| {{
-            \\                log.warn("Could not read log for step {{s}}: {{any}}", .{{result.step_name, read_err}});
             \\            }}
             \\            log.info("✓ Step {{s}} completed", .{{result.step_name}});
             \\        }}
             \\
         , .{});
-        try writer.print(
-            \\        try stdout.print("\n", .{{}});
-            \\    }}
-            \\
-            \\
-        , .{});
+        try writer.print("    }}\n\n", .{});
     }
 
     try writer.writeAll(templates.main_success_footer);
@@ -419,7 +385,7 @@ fn generateStepImplementation(writer: *std.Io.Writer, pipeline_name: []const u8,
                 try writer.print("    defer {s}_instance.deinit(allocator);\n", .{r.type_name});
                 try writer.writeAll("\n");
                 try writer.print("    var {s}_recipe = {s}_instance.recipe();\n", .{ r.type_name, r.type_name });
-                try writer.print("    try {s}_recipe.run(allocator, stdout);\n", .{r.type_name});
+                try writer.print("    try {s}_recipe.run(allocator);\n", .{r.type_name});
             } else {
                 // Unknown recipe - use fallback template
                 try writer.print(templates.Recipe.not_implemented, .{ r.type_name, r.type_name });
